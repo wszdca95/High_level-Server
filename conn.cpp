@@ -56,8 +56,25 @@ RET_CODE conn:read_clt()
     while(true){
         if(m_clt_read_idx>=BUF_SIZE)
         {
-            log(LOG_ERROR,__FILE__,__LINE__,"%s","")
+            log(LOG_ERROR,__FILE__,__LINE__,"%s","The client read buffer is full,let server write");
+            return BUFFER_FULL;
         }
+
+        bytes_read=recv(m_cltfd,m_clt_buf+m_clt_read_idx,BUFFER_SIZE-m_clt_read_idx,0);
+        if(bytes_read==-1)
+        {
+            if(errno==EAGAIN || errno==EWOULDBLOCK)
+            {
+                break;
+            }
+            return IOERR;
+        }
+        else if(bytes_read==0)
+        {
+            return CLOSED;
+        }
+        m_clt_read_idx+=bytes_read;
+        return ((m_clt_read_idx-m_clt_write_idx)>0)?OK:NOTHING;
     }
     
 }
