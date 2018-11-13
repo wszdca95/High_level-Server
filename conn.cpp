@@ -74,7 +74,101 @@ RET_CODE conn:read_clt()
             return CLOSED;
         }
         m_clt_read_idx+=bytes_read;
-        return ((m_clt_read_idx-m_clt_write_idx)>0)?OK:NOTHING;
+
     }
+    return ( ( m_srv_read_idx - m_srv_write_idx ) > 0 ) ? OK : NOTHING;
     
+}
+
+RET_CODE conn::write_clt()
+{
+    int bytes_write = 0;
+    while( true )
+    {
+        if( m_srv_read_idx <= m_srv_write_idx )
+        {
+            m_srv_read_idx = 0;
+            m_srv_write_idx = 0;
+            return BUFFER_EMPTY;
+        }
+
+        bytes_write = send( m_cltfd, m_srv_buf + m_srv_write_idx, m_srv_read_idx - m_srv_write_idx, 0 );
+        if ( bytes_write == -1 )
+        {
+            if( errno == EAGAIN || errno == EWOULDBLOCK )
+            {
+                return TRY_AGAIN;
+            }
+            log( LOG_ERR, __FILE__, __LINE__, "write client socket failed, %s", strerror( errno ) );
+            return IOERR;
+        }
+        else if ( bytes_write == 0 )
+        {
+            return CLOSED;
+        }
+
+        m_srv_write_idx += bytes_write;
+    }
+}
+
+RET_CODE conn::read_srv()
+{
+    int bytes_read = 0;
+    while( true )
+    {
+        if( m_srv_read_idx >= BUF_SIZE )
+        {
+            log( LOG_ERR, __FILE__, __LINE__, "%s", "the server read buffer is full, let client write" );
+            return BUFFER_FULL;
+        }
+
+        bytes_read = recv( m_srvfd, m_srv_buf + m_srv_read_idx, BUF_SIZE - m_srv_read_idx, 0 );
+        if ( bytes_read == -1 )
+        {
+            if( errno == EAGAIN || errno == EWOULDBLOCK )
+            {
+                break;
+            }
+            return IOERR;
+        }
+        else if ( bytes_read == 0 )
+        {
+            log( LOG_ERR, __FILE__, __LINE__, "%s", "the server should not close the persist connection" );
+            return CLOSED;
+        }
+
+        m_srv_read_idx += bytes_read;
+    }
+    return ( ( m_srv_read_idx - m_srv_write_idx ) > 0 ) ? OK : NOTHING;
+}
+
+RET_CODE conn::write_clt()
+{
+    int bytes_write = 0;
+    while( true )
+    {
+        if( m_srv_read_idx <= m_srv_write_idx )
+        {
+            m_srv_read_idx = 0;
+            m_srv_write_idx = 0;
+            return BUFFER_EMPTY;
+        }
+
+        bytes_write = send( m_cltfd, m_srv_buf + m_srv_write_idx, m_srv_read_idx - m_srv_write_idx, 0 );
+        if ( bytes_write == -1 )
+        {
+            if( errno == EAGAIN || errno == EWOULDBLOCK )
+            {
+                return TRY_AGAIN;
+            }
+            log( LOG_ERR, __FILE__, __LINE__, "write client socket failed, %s", strerror( errno ) );
+            return IOERR;
+        }
+        else if ( bytes_write == 0 )
+        {
+            return CLOSED;
+        }
+
+        m_srv_write_idx += bytes_write;
+    }
 }
